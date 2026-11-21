@@ -31,6 +31,13 @@
 | TRAP-11 | 目的地偏移 | 同刻多桶 | UTC比较 | `app/values.py` | `tests/test_m3.py::test_equivalent_timezone` |
 | TRAP-12 | DST自然日 | 固定24小时 | 按当地午夜切片 | `app/modules/m5_timeliness/rules.py` | `tests/test_m5.py::test_dst_actual_elapsed_hours` |
 | TRAP-13 | 迟到妥投补传 | 按上传时间赔付 | 发生时间重建 | `app/modules/m4_paths/rules.py` | `tests/test_m4.py::test_late_upload_event_time_decides` |
+| TRAP-30 | 回拨重复钟点 | 按补传顺序采纳，把晚签收判达标 | 双候选不猜唯一，未消歧不进正式时效 | `app/dst.py`,`app/modules/m3_timezones/rules.py` | `tests/test_dst.py::test_fallback_local_time_has_two_candidates` |
+| TRAP-31 | 显式偏移消歧 | 任意选fold | 仅接受clock_offset客观偏移 | `app/dst.py::disambiguate` | `tests/test_dst.py::test_explicit_offset_disambiguates_to_unique` |
+| TRAP-32 | 春季前跳空当 | 当成有效钟点 | SKIPPED隔离 | `app/dst.py::resolve_local` | `tests/test_dst.py::test_spring_forward_gap_is_skipped` |
+| TRAP-33 | 挂起件误计赔 | 临时答复直接赔付 | settleable=false，预期赔付强制0 | `app/modules/m5_timeliness/rules.py`,`app/modules/m6_compensation/rules.py` | `tests/test_dst.py::test_pending_parcel_excluded_from_formal_sla_and_comp` |
+| TRAP-34 | 重试重复计赔 | 每次重试再赔一次 | 补偿登记幂等表，主键(批次,包裹) | `app/store.py::claim_compensation` | `tests/test_dst.py::test_compensation_claim_is_idempotent` |
+| TRAP-35 | 替换失败覆盖旧结论 | 先删后算导致丢失 | 先算后存，失败不触库，旧批保留 | `app/pipeline.py::replace_run` | `tests/test_dst.py::test_failed_replace_keeps_previous_conclusion` |
+| TRAP-36 | 证据与页面不一致 | 下载另算一套 | 归档直接序列化同批结论，含候选与未采用原因 | `app/archive.py` | `tests/test_dst.py::test_archive_matches_screen_conclusion` |
 | TRAP-23 | 假日端点 | 误算全天 | 当地日半开切段 | `app/modules/m5_timeliness/rules.py` | `tests/test_m5.py::test_holiday_full_day_stops` |
 
 ## 对账规则

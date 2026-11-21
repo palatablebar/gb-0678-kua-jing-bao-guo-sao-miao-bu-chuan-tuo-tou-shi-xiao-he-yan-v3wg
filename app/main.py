@@ -45,6 +45,27 @@ def create_app():
         from app.archive import build_archive
         run=store.get(run_id)
         return application.response_class(build_archive(run),mimetype="text/csv",headers={"Content-Disposition":'attachment; filename="evidence.csv"'})
+    @application.post("/api/runs/<run_id>/claims")
+    def claim(run_id):
+        # 幂等赔付：同一批次同一包裹重试只生效一次，重复请求返回 already_claimed。
+        run=store.get(run_id)
+        p=request.get_json(silent=True) or {}
+        parcel=p.get("parcel")
+        if not parcel: raise DomainError("BAD_PARCEL","请提供包裹号")
+        settleable={str(r.get("parcel")):r for r in run["stages"][5]["rows"] if r.get("settleable")}
+        if str(parcel) not in settleable: raise DomainError("NOT_SETTLEABLE","时效挂起件不可结算赔付",409)
+        amount=settleable[str(parcel)].get("expected","0")
+        created=store.claim_compensation(run_id,parcel,amount)
+        return jsonify({"parcel":str(parcel),"amount":amount,"claimed":created,"already_claimed":not created,"claims":store.list_claims(run_id)})
+    @application.get("/api/runs/<run_id>/raw")
+    def raw_scans(run_id):
+        # 原始扫描只读视图：任何重算/替换都不改写，用于核对与误删防护。
+        run=store.get(run_id)
+        stage=run["stages"][0]
+        return jsonify({"run_id":run_id,"input_sha256":run["manifest"]["input_sha256"],
+                        "accepted_scans":stage["rows"],
+                        "intake_quarantine":stage["quarantine"],
+                        "metrics":stage["metrics"]})
     for index,(slug,title) in enumerate(MODULES,1):
         module=importlib.import_module(f"app.modules.m{index}_{slug}.handler")
         application.register_blueprint(module.bp)

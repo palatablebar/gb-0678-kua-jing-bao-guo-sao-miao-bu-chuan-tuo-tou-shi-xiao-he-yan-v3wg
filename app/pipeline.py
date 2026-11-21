@@ -13,7 +13,7 @@ from app.modules.m6_compensation.rules import evaluate as stage6
 from app.modules.m7_archives.rules import evaluate as stage7
 STAGES=[stage1,stage2,stage3,stage4,stage5,stage6,stage7]
 def load_sample(name):
-    if name not in {"dirty.csv","clean.csv","legacy.csv"}: raise DomainError("BAD_SAMPLE","样例不存在",404)
+    if name not in {"dirty.csv","clean.csv","legacy.csv","dst.csv"}: raise DomainError("BAD_SAMPLE","样例不存在",404)
     return (ROOT/"sample_data"/name).read_bytes()
 def calculate(raw,params=None,stop=6):
     params=params or {};started=time.monotonic();context={"parameters":params,"raw":raw,"quarantine":[]};stages=[];rows=[]
@@ -28,6 +28,16 @@ def calculate(raw,params=None,stop=6):
     return {"run_id":digest(raw,params)[:20],"stages":stages,"manifest":manifest(raw,params,started),"parameters":params}
 def execute(raw,params=None):
     result=calculate(raw,params);return store.save(result["run_id"],result)
+def replace_run(old_id,raw,params=None):
+    """用新输入替换批次：先完整算清并落盘，再确认旧批次状态。
+
+    新计算若失败会直接抛错，不会触碰旧批次，旧版结论保持不变（失败恢复旧版）。
+    原始扫描随各自批次只读保存，替换不会删除旧批次数据。
+    """
+    old=store.get(old_id)
+    result=calculate(raw,params)
+    saved=store.save(result["run_id"],result)
+    return {"replaced":old_id!="","previous_run_id":old_id,"run":saved}
 def stage_preview(index,payload):
     if "rows" in payload and index>0:
         if not isinstance(payload["rows"],list) or any(not isinstance(row,dict) for row in payload["rows"]): raise DomainError("BAD_ROWS","记录需要对象列表")

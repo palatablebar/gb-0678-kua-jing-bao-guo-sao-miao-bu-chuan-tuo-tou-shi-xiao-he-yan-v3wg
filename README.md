@@ -25,6 +25,18 @@ docker compose exec -T app pytest -q
 
 以事件发生时刻重建路径，补传不改变既有妥投时间；承诺时钟按目的地节假日停表。
 
+### 夏令时回拨歧义裁决（TRAP-30～36）
+
+承运商晚到补传只写当地时间，回拨日同一钟点出现两次。裁决口径：
+
+1. **不按补传顺序采纳**：`received_time` 只算上传延迟，绝不能用于在两个真实时刻间二选一，否则可能把更晚的签收误判为达标。
+2. **唯一时刻才进正式时效**：普通钟点直接定UTC；回拨重复钟点生成两个候选（fold=0/1），仅当承运商在 `clock_offset` 显式给出UTC偏移时才消歧为唯一正式时刻。
+3. **拿不到唯一时刻则时效挂起**：M4 出 `TIME_PENDING` 临时路径并在页面列出每个候选时刻及未采用原因；M5 不计赔付，仅按**最晚候选**给客服当天临时答复（最保守），结论标注“临时”。
+4. **证据下载读取同一结论**：归档CSV直接序列化该批次结果，挂起件标注 `time_pending/临时` 并附两个候选。
+5. **失败恢复旧版、原始扫描不误删、重试不重复计赔**：重算先算后存，失败不触库；`/raw` 只读原始扫描；赔付经幂等登记，挂起件不可结算（409）。
+
+11列本地补传批（含 `clock_offset`）见 `sample_data/dst.csv`；10列标准批仍拒绝无偏移时间。
+
 ## 演示
 
 1. 打开首页，核对当次计算、差异和隔离原因。
@@ -36,7 +48,7 @@ docker compose exec -T app pytest -q
 
 输入列见 `docs/DATA-DICTIONARY.md`。项目包含dirty.csv、clean.csv、legacy.csv，统一走实际导入路径。上传限制4MB，拒绝不带时区的时间。业务键按字符串保留，Decimal参与计算，空值不会当零。
 
-`POST /api/runs` 接收sample或csv；`GET /api/runs`返回历史批次；`POST /api/runs/<id>/review`需要version与decision；`GET /api/runs/<id>/archive`返回唯一证据导出。
+`POST /api/runs` 接收sample或csv；`GET /api/runs`返回历史批次；`POST /api/runs/<id>/review`需要version与decision；`GET /api/runs/<id>/archive`返回唯一证据导出。`POST /api/runs/<id>/claims`按(批次,包裹)幂等登记赔付，重试不重复计赔，时效挂起件返回409；`GET /api/runs/<id>/raw`只读返回原始扫描，重算/替换均不删除。
 
 ## 范围
 
